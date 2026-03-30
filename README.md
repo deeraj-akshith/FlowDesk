@@ -1,222 +1,270 @@
-# FlowDesk 🗂️
+# FlowDesk
 
-A full-stack task management application built with React + Spring Boot + MySQL.
+FlowDesk is a lightweight task management web app built for small teams who need a single place to create, assign, and track work — without the overhead of enterprise tools.
 
 ---
 
-## ERD Diagram
+## Why FlowDesk?
+
+Most small teams track tasks in spreadsheets or chat threads. This causes:
+
+- No clear ownership — anyone can claim a task was "done"
+- Status is invisible unless you ask someone directly
+- No history of who did what or when
+- Admins have no bird's-eye view of team workload
+
+FlowDesk solves this with a simple dashboard, role-based access, and a clean REST API connecting a React frontend to a Spring Boot backend.
+
+---
+
+## Database Schema
 
 ```
-┌─────────────────────────────┐       ┌──────────────────────────────────────┐
-│           users             │       │               tasks                  │
-├─────────────────────────────┤       ├──────────────────────────────────────┤
-│ id          BIGINT (PK)     │◄──┐   │ id            BIGINT (PK)            │
-│ name        VARCHAR(100)    │   │   │ title         VARCHAR(255)           │
-│ email       VARCHAR(255) UQ │   │   │ description   TEXT                   │
-│ password_hash VARCHAR(255)  │   │   │ status        ENUM(TODO,IN_PROGRESS, │
-│ role        ENUM(ADMIN,USER)│   │   │               DONE)                  │
-│ active      BOOLEAN         │   └───│ assigned_to   BIGINT (FK → users.id) │
-│ created_at  DATETIME        │   ┌───│ created_by    BIGINT (FK → users.id) │
-└─────────────────────────────┘   │   │ created_at    DATETIME               │
-                                  │   │ updated_at    DATETIME               │
-          users ◄──────────────── ┘   └──────────────────────────────────────┘
+users
+─────────────────────────────────────
+id            BIGINT        PK, AUTO_INCREMENT
+name          VARCHAR(100)  NOT NULL
+email         VARCHAR(255)  NOT NULL, UNIQUE
+password_hash VARCHAR(255)  NOT NULL
+role          ENUM          'ADMIN' | 'USER'
+active        BOOLEAN       DEFAULT true
+created_at    DATETIME      auto-set on insert
+
+
+tasks
+─────────────────────────────────────
+id            BIGINT        PK, AUTO_INCREMENT
+title         VARCHAR(255)  NOT NULL
+description   TEXT          nullable
+status        ENUM          'TODO' | 'IN_PROGRESS' | 'DONE'
+assigned_to   BIGINT        FK → users.id  (nullable)
+created_by    BIGINT        FK → users.id  (NOT NULL)
+created_at    DATETIME      auto-set on insert
+updated_at    DATETIME      auto-updated on change
+
+
+Relationships
+─────────────────────────────────────
+tasks.assigned_to  →  users.id   (many-to-one, optional)
+tasks.created_by   →  users.id   (many-to-one, required)
 ```
 
 ---
 
 ## Tech Stack
 
-| Layer     | Technology                              |
-|-----------|-----------------------------------------|
-| Frontend  | React 18, Vite, Tailwind CSS, Axios     |
-| Backend   | Spring Boot 3.3, Spring Security, JPA   |
-| Database  | MySQL 8                                 |
-| Auth      | JWT (Bearer token)                      |
-| DevOps    | Docker, Docker Compose, GitHub Actions  |
-| Docs      | Springdoc OpenAPI / Swagger UI          |
+**Frontend**
+- React 18 with Vite
+- Tailwind CSS for styling
+- Axios for HTTP requests
+- React Router v6 for navigation
+
+**Backend**
+- Spring Boot 3.3
+- Spring Security with stateless JWT auth
+- Spring Data JPA + Hibernate
+- MySQL 8 as the database
+
+**Infrastructure**
+- Docker + Docker Compose (three services: db, backend, frontend)
+- GitHub Actions for CI
 
 ---
 
-## Project Structure
+## Folder Structure
 
 ```
-teamflow/
-├── frontend/               # React + Vite SPA
-│   ├── src/
-│   │   ├── api/            # Axios client + endpoint functions
-│   │   ├── components/     # Shared UI components (Layout, StatusBadge)
-│   │   ├── context/        # AuthContext (JWT state)
-│   │   └── pages/          # LoginPage, RegisterPage, DashboardPage,
-│   │                       # TaskFormPage, TaskDetailPage, UsersPage
-│   ├── Dockerfile
-│   └── vite.config.js
+flowdesk/
 │
-├── backend/                # Spring Boot REST API
+├── frontend/
+│   ├── src/
+│   │   ├── api/            # axios instance + all endpoint calls
+│   │   ├── components/     # Layout (sidebar + nav), StatusBadge
+│   │   ├── context/        # AuthContext — stores JWT + user in state
+│   │   └── pages/          # Login, Register, Dashboard, TaskForm,
+│   │                       # TaskDetail, Users
+│   ├── Dockerfile
+│   ├── index.html
+│   ├── vite.config.js
+│   └── package.json
+│
+├── backend/
 │   └── src/main/java/com/teamflow/
-│       ├── controller/     # AuthController, TaskController, UserController
-│       ├── service/        # AuthService, TaskService, UserService
-│       ├── repository/     # UserRepository, TaskRepository
-│       ├── model/          # User, Task (JPA entities)
-│       ├── dto/            # Dtos.java (all request/response records)
-│       ├── security/       # JwtUtils, JwtAuthFilter, UserDetailsServiceImpl
-│       └── config/         # SecurityConfig, OpenApiConfig, DataSeeder
+│       ├── config/         # SecurityConfig, OpenApiConfig, DataSeeder
+│       ├── controller/     # AuthController, TaskController,
+│       │                   # UserController, GlobalExceptionHandler
+│       ├── dto/            # All request + response DTOs in Dtos.java
+│       ├── model/          # User.java, Task.java (JPA entities)
+│       ├── repository/     # UserRepository, TaskRepository (JPQL queries)
+│       ├── security/       # JwtUtils, JwtAuthFilter,
+│       │                   # UserDetailsServiceImpl
+│       └── service/        # AuthService, TaskService, UserService
 │
 ├── docker-compose.yml
 ├── .env.example
-└── .github/workflows/ci.yml
+└── .github/
+    └── workflows/
+        └── ci.yml
 ```
 
 ---
 
-## Running Locally (without Docker)
+## How to Run Locally
 
 ### Prerequisites
-- Java 17+
-- Node 20+
-- MySQL 8 running locally
+- Java 17
+- Node 20
+- MySQL 8 running on localhost
+- Maven 3.9+
 
-### 1. Database
-```bash
-mysql -u root -p
+### 1. Create the database
+```sql
 CREATE DATABASE taskdb;
-EXIT;
 ```
 
-### 2. Backend
+### 2. Start the backend
 ```bash
 cd backend
-# Edit src/main/resources/application.properties if needed
 mvn spring-boot:run
-# API available at http://localhost:8080
-# Swagger UI: http://localhost:8080/api/swagger-ui.html
 ```
 
-### 3. Frontend
+The API starts on `http://localhost:8080`. On first boot it seeds an admin account automatically.
+
+### 3. Start the frontend
 ```bash
 cd frontend
 npm install
 npm run dev
-# App available at http://localhost:5173
 ```
+
+App is available at `http://localhost:5173`. The Vite dev server proxies `/api` calls to port 8080 automatically.
 
 ---
 
-## Running with Docker Compose
+## How to Run with Docker
+
+> Make sure Docker Desktop is running before these steps.
 
 ```bash
-# 1. Copy and configure env vars
+# 1. Build the backend JAR
+cd backend
+mvn clean package -DskipTests
+cd ..
+
+# 2. Set up environment
 cp .env.example .env
-# Edit .env — set a strong MYSQL_ROOT_PASSWORD and JWT_SECRET
+# Open .env and set a strong MYSQL_ROOT_PASSWORD and JWT_SECRET
 
-# 2. Build backend JAR first
-cd backend && mvn -B clean package -DskipTests && cd ..
-
-# 3. Start everything
+# 3. Start all services
 docker compose up --build
-
-# App: http://localhost:4173
-# API: http://localhost:8080
-# Swagger: http://localhost:8080/api/swagger-ui.html
 ```
 
-To tear down:
+| Service  | URL                                         |
+|----------|---------------------------------------------|
+| App      | http://localhost:4173                       |
+| API      | http://localhost:8080                       |
+| Swagger  | http://localhost:8080/api/swagger-ui.html   |
+
+To stop everything:
 ```bash
-docker compose down -v   # -v removes the MySQL volume (data reset)
+docker compose down
+# Add -v to also wipe the database volume
+docker compose down -v
 ```
 
 ---
 
-## Default Test Users
+## Default Credentials
 
-| Email                | Password  | Role  |
-|----------------------|-----------|-------|
-| admin@flowdesk.dev   | admin123  | ADMIN |
+| Role  | Email               | Password |
+|-------|---------------------|----------|
+| Admin | admin@flowdesk.dev  | admin123 |
 
-Register additional users via the `/register` page or `POST /api/auth/register`.
+New regular users can self-register at `/register`.
 
 ---
 
-## API Reference
+## API Endpoints
 
-### Auth
-
-| Method | Endpoint              | Auth     | Description         |
-|--------|-----------------------|----------|---------------------|
-| POST   | /api/auth/register    | Public   | Register new user   |
-| POST   | /api/auth/login       | Public   | Login, get JWT      |
+### Authentication
+```
+POST  /api/auth/register    public
+POST  /api/auth/login       public — returns { token, user }
+```
 
 ### Users
-
-| Method | Endpoint                    | Auth      | Description         |
-|--------|-----------------------------|-----------|---------------------|
-| GET    | /api/users                  | ADMIN     | List all users      |
-| GET    | /api/users/{id}             | Any user  | Get user by ID      |
-| PATCH  | /api/users/{id}/deactivate  | ADMIN     | Deactivate user     |
+```
+GET   /api/users                  Admin only
+GET   /api/users/{id}             Authenticated
+PATCH /api/users/{id}/deactivate  Admin only
+```
 
 ### Tasks
+```
+POST   /api/tasks           Create (any authenticated user)
+GET    /api/tasks           List with optional filters
+GET    /api/tasks/{id}      Get single task
+PUT    /api/tasks/{id}      Update (creator / assignee / admin)
+DELETE /api/tasks/{id}      Admin only
+```
 
-| Method | Endpoint          | Auth      | Description                        |
-|--------|-------------------|-----------|------------------------------------|
-| GET    | /api/tasks        | Any user  | List tasks (filter: status, assignedTo) |
-| GET    | /api/tasks/{id}   | Any user  | Get task by ID                     |
-| POST   | /api/tasks        | Any user  | Create task                        |
-| PUT    | /api/tasks/{id}   | Creator / Assignee / Admin | Update task      |
-| DELETE | /api/tasks/{id}   | ADMIN     | Delete task                        |
-
-**Filter examples:**
+**Filtering tasks:**
 ```
 GET /api/tasks?status=TODO
-GET /api/tasks?assignedTo=2
-GET /api/tasks?status=IN_PROGRESS&assignedTo=3
+GET /api/tasks?assignedTo=3
+GET /api/tasks?status=IN_PROGRESS&assignedTo=2
 ```
 
-### Auth header for protected routes:
+All protected routes require:
 ```
 Authorization: Bearer <token>
 ```
 
 ---
 
-## Authorization Rules
+## Role & Permission Rules
 
-| Action              | Rule                                               |
-|---------------------|----------------------------------------------------|
-| Create task         | Any authenticated user                             |
-| Edit task           | Task creator OR task assignee OR Admin             |
-| Delete task         | Admin only                                         |
-| Assign task to user | Any user (self-assign); Admin can assign to anyone |
-| List all users      | Admin only                                         |
-| Deactivate user     | Admin only (cannot deactivate another Admin)       |
+| Action                  | Who can do it                          |
+|-------------------------|----------------------------------------|
+| Register                | Anyone (public)                        |
+| Login                   | Anyone (public)                        |
+| Create a task           | Any logged-in user                     |
+| Edit a task             | Task creator, assigned user, or Admin  |
+| Delete a task           | Admin only                             |
+| Assign tasks            | Any user (self-assign); Admin for any  |
+| View all users          | Admin only                             |
+| Deactivate a user       | Admin only (cannot deactivate Admins)  |
 
 ---
 
 ## Environment Variables
 
-| Variable               | Default                        | Description              |
-|------------------------|--------------------------------|--------------------------|
-| MYSQL_ROOT_PASSWORD    | change-me                      | MySQL root password      |
-| JWT_SECRET             | (long default string)          | JWT signing secret       |
-| SPRING_DATASOURCE_URL  | jdbc:mysql://db:3306/taskdb... | Set automatically by Compose |
+Defined in `.env` (copy from `.env.example`):
 
-> ⚠️ Never commit `.env` to Git. It is in `.gitignore`.
+| Variable             | Description                        |
+|----------------------|------------------------------------|
+| MYSQL_ROOT_PASSWORD  | Password for the MySQL root user   |
+| JWT_SECRET           | Secret key used to sign JWT tokens |
 
----
-
-## Known Limitations & Future Improvements
-
-- No refresh token support (JWT expires in 24h, user must log in again)
-- No pagination on task list (suitable for small teams; add `Pageable` for scale)
-- No email verification on registration
-- Tests are skipped in CI Docker build step (add integration tests with H2/Testcontainers)
-- Role assignment is USER-only on self-registration; Admin must be seeded or promoted via DB
+> Never commit `.env` to version control. It is listed in `.gitignore`.
 
 ---
 
-## CI / CD
+## CI Pipeline
 
-GitHub Actions runs on every push/PR to `main`:
-1. Builds the Spring Boot JAR with Maven
-2. Builds the React app with Vite
-3. Builds both Docker images to verify Dockerfiles compile
+GitHub Actions runs on every push or pull request to `main`:
+
+1. Sets up Java 17 (Eclipse Temurin) and runs `mvn clean verify`
+2. Sets up Node 20 and runs `npm install && npm run build`
+3. Builds both Docker images to verify the Dockerfiles are valid
 
 See `.github/workflows/ci.yml`.
+
+---
+
+## Known Limitations
+
+- JWT tokens expire after 24 hours with no refresh mechanism
+- No email verification on registration
+- Task list is not paginated (fine for small teams, add `Pageable` to scale)
+- CI skips integration tests (add Testcontainers for full coverage)
